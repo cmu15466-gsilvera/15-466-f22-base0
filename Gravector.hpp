@@ -16,11 +16,12 @@ struct Ball
 {
     Ball(const glm::vec2 &p, const glm::vec2 &v, const glm::vec2 &a) : pos(p), vel(v), accel(a)
     {
-        radius = glm::vec2(0.2f, 0.2f);
+        radius = 0.2f;
+        mass = 1.0f;
         color = glm::u8vec4(255.f, 255.f, 255.f, 255.f);
     }
     glm::vec2 pos, vel, accel;
-    glm::vec2 radius;
+    float radius, mass;
     glm::u8vec4 color;
 };
 
@@ -37,9 +38,18 @@ struct Gravector : Mode
 
     glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
 
-    const size_t num_init_balls = 100;
+    const size_t num_init_balls = 1;
     const float gravity_scale = 4.f;
+    const float radius_growth = 0.001f;
+    const float mass_growth = 0.001f;
+    const float radius_shrink_factor = 0.5f; // during collisions
+    const float mass_shrink_factor = 0.5f;   // during collisions
+    const float min_ball_radius_before_death = 0.01f;
+    const float ball_ball_collision_damping = 1.1f; // how much "energy" is preserved after ball-ball collision
+    const float ball_wall_collision_damping = 0.3f; // how much "energy" is preserved after ball-wall collision
+
     std::vector<Ball> balls;
+    void new_ball();
 
     //--- direction vector
     float direction_heading = 0;

@@ -127,10 +127,22 @@ bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size
                                          (evt.motion.y + 0.5f) / window_size.y * -2.0f + 1.0f);
         direction_heading = glm::atan(clip_mouse.y, clip_mouse.x);
         triangle_radius.y = magnitude_scale * glm::length(clip_mouse);
-        return true;
+    }
+
+    if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_SPACE)
+    {
+        new_ball();
     }
 
     return false;
+}
+
+void Gravector::new_ball()
+{
+    static std::mt19937 mt;
+    const float random_x = (mt() / float(mt.max())) * 2.f * court_radius.x - court_radius.x;
+    const float random_y = (mt() / float(mt.max())) * 2.f * court_radius.y - court_radius.y;
+    balls.push_back(Ball(glm::vec2(random_x, random_y), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f)));
 }
 
 void Gravector::update(float elapsed)
@@ -146,46 +158,99 @@ void Gravector::update(float elapsed)
         b.accel = glm::vec2(glm::cos(direction_heading), glm::sin(direction_heading)) * triangle_radius.y;
         b.vel += elapsed * b.accel * gravity_scale;
         b.pos += elapsed * b.vel;
+        b.radius += radius_growth;
+        b.mass += mass_growth;
     }
 
+    for (Ball &b : balls)
+    {
+        // handle collisions
+        for (Ball &other_b : balls)
+        {
+            if (&b != &other_b)
+            {
+                const float dist = glm::length(b.pos - other_b.pos);
+                const float overlap = (b.radius + other_b.radius) - dist;
+                if (overlap > 0)
+                {
+                    // compute overlap offset
+                    const float b_speed = glm::length(b.vel);
+                    const float other_b_speed = glm::length(other_b.vel);
+                    const glm::vec2 disp = overlap * ((b.pos - other_b.pos) / dist);
+                    b.pos += (b_speed / (b_speed + other_b_speed)) * disp;
+                    other_b.pos -= (other_b_speed / (b_speed + other_b_speed)) * disp;
+
+                    // compute collision
+                    const float sum_mass = b.mass + other_b.mass;
+                    b.vel = ball_ball_collision_damping *
+                            (b.vel * (b.mass - other_b.mass) + (2 * other_b.mass * other_b.vel)) / sum_mass;
+                    other_b.vel = ball_ball_collision_damping *
+                                  (other_b.vel * (other_b.mass - b.mass) + (2 * b.mass * b.vel)) / sum_mass;
+
+                    // update their positions by one velocity tick
+                    b.pos += elapsed * b.vel;
+                    other_b.pos += elapsed * other_b.vel;
+
+                    // shrink these balls
+                    b.radius *= radius_shrink_factor;
+                    b.mass *= mass_shrink_factor;
+                    other_b.radius *= radius_shrink_factor;
+                    other_b.mass *= mass_shrink_factor;
+                }
+            }
+        }
+    }
+
+    std::vector<Ball> alive_balls;
+    for (Ball &b : balls)
+    {
+        if (b.radius > min_ball_radius_before_death)
+        {
+            alive_balls.push_back(b);
+        }
+    }
+    balls.clear();
+    balls.swap(alive_balls);
+    // now balls contains only alive balls
+
+    /// TODO: refactor
     for (Ball &ball : balls)
     {
         // court walls:
-        const float damping = 0.1f; // how much "energy" is lost in the collision
-        if (ball.pos.y > court_radius.y - ball.radius.y)
+        if (ball.pos.y > court_radius.y - ball.radius)
         {
-            ball.pos.y = court_radius.y - ball.radius.y;
+            ball.pos.y = court_radius.y - ball.radius;
             if (ball.vel.y > 0.0f)
             {
-                ball.vel.y = -damping * ball.vel.y;
+                ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
             }
         }
-        if (ball.pos.y < -court_radius.y + ball.radius.y)
+        if (ball.pos.y < -court_radius.y + ball.radius)
         {
-            ball.pos.y = -court_radius.y + ball.radius.y;
+            ball.pos.y = -court_radius.y + ball.radius;
             if (ball.vel.y < 0.0f)
             {
-                ball.vel.y = -damping * ball.vel.y;
+                ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
             }
         }
 
-        if (ball.pos.x > court_radius.x - ball.radius.x)
+        if (ball.pos.x > court_radius.x - ball.radius)
         {
-            ball.pos.x = court_radius.x - ball.radius.x;
+            ball.pos.x = court_radius.x - ball.radius;
             if (ball.vel.x > 0.0f)
             {
-                ball.vel.x = -damping * ball.vel.x;
+                ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
             }
         }
-        if (ball.pos.x < -court_radius.x + ball.radius.x)
+        if (ball.pos.x < -court_radius.x + ball.radius)
         {
-            ball.pos.x = -court_radius.x + ball.radius.x;
+            ball.pos.x = -court_radius.x + ball.radius;
             if (ball.vel.x < 0.0f)
             {
-                ball.vel.x = -damping * ball.vel.x;
+                ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
             }
         }
@@ -283,7 +348,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
     // ball:
     for (Ball &b : balls)
     {
-        draw_circle(b.pos, b.radius, b.color);
+        draw_circle(b.pos, glm::vec2(b.radius, b.radius), b.color);
     }
 
     draw_triangle(triangle, triangle_radius, direction_heading, bg_color);
