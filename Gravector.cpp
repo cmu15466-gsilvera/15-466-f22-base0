@@ -215,6 +215,28 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
         vertices.emplace_back(glm::vec3(center.x - radius.x, center.y + radius.y, 0.0f), color, glm::vec2(0.5f, 0.5f));
     };
 
+    auto draw_circle = [&vertices](glm::vec2 const &center, glm::vec2 const &radius, glm::u8vec4 const &color,
+                                   const int num_verts = 20) {
+        // draw a circle by drawing a bunch of triangles
+        const int N = num_verts; // of vertices used to draw circle
+
+        glm::vec2 circ_verts[N];
+        for (int i = 0; i < N; i++)
+        {
+            circ_verts[i] = glm::vec2((radius.x * glm::cos(i * M_2_PI / N)), (radius.y * glm::sin(i * M_2_PI / N)));
+        }
+
+        for (int i = 0; i < N; i++)
+        {
+            vertices.emplace_back(glm::vec3(center.x, center.y, 0.0f), color, glm::vec2(0.5f, 0.5f));
+            vertices.emplace_back(glm::vec3(center.x + circ_verts[(i) % N].x, center.y + circ_verts[i % N].y, 0.0f),
+                                  color, glm::vec2(0.5f, 0.5f));
+            vertices.emplace_back(
+                glm::vec3(center.x + circ_verts[(i + 1) % N].x, center.y + circ_verts[(i + 1) % N].y, 0.0f), color,
+                glm::vec2(0.5f, 0.5f));
+        }
+    };
+
     // inline helper function for triangle drawing:
     auto draw_triangle = [&vertices](glm::vec2 const &center, const glm::vec2 radius, const float heading,
                                      glm::u8vec4 const &color) {
@@ -247,7 +269,8 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
     draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
 
     // ball:
-    draw_rectangle(ball, ball_radius, fg_color);
+    // draw_rectangle(ball, ball_radius, fg_color);
+    draw_circle(ball, ball_radius, fg_color);
 
     draw_triangle(triangle, triangle_radius, direction_heading, bg_color);
 
