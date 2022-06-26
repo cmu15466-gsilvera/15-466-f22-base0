@@ -12,6 +12,18 @@
  * Gravector is a game mode that implements a single-player game of Gravector.
  */
 
+struct Ball
+{
+    Ball(const glm::vec2 &p, const glm::vec2 &v, const glm::vec2 &a) : pos(p), vel(v), accel(a)
+    {
+        radius = glm::vec2(0.2f, 0.2f);
+        color = glm::u8vec4(255.f, 255.f, 255.f, 255.f);
+    }
+    glm::vec2 pos, vel, accel;
+    glm::vec2 radius;
+    glm::u8vec4 color;
+};
+
 struct Gravector : Mode
 {
     Gravector();
@@ -24,11 +36,10 @@ struct Gravector : Mode
     //----- game state -----
 
     glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
-    glm::vec2 ball_radius = glm::vec2(0.2f, 0.2f);
 
-    glm::vec2 ball = glm::vec2(0.0f, 0.0f);
-    glm::vec2 ball_velocity = glm::vec2(0.0f, 0.0f);
-    glm::vec2 ball_accel = glm::vec2(0.0f, 0.0f);
+    const size_t num_init_balls = 100;
+    const float gravity_scale = 4.f;
+    std::vector<Ball> balls;
 
     //--- direction vector
     float direction_heading = 0;

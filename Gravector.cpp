@@ -19,6 +19,11 @@ Gravector::Gravector()
         GL_ERRORS(); // PARANOIA: print out any OpenGL errors that may have happened
     }
 
+    for (size_t i = 0; i < num_init_balls; i++)
+    {
+        balls.push_back(Ball(glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f)));
+    }
+
     { // vertex array mapping buffer for color_texture_program:
         // ask OpenGL to fill vertex_buffer_for_color_texture_program with the name of an unused vertex array object:
         glGenVertexArrays(1, &vertex_buffer_for_color_texture_program);
@@ -135,47 +140,54 @@ void Gravector::update(float elapsed)
 
     //----- ball update -----
 
-    ball_accel = glm::vec2(glm::cos(direction_heading), glm::sin(direction_heading)) * triangle_radius.y;
-    ball_velocity += elapsed * ball_accel * 4.f;
-    ball += elapsed * ball_velocity;
-
-    // court walls:
-    const float damping = 0.1f; // how much "energy" is lost in the collision
-    if (ball.y > court_radius.y - ball_radius.y)
+    for (Ball &b : balls)
     {
-        ball.y = court_radius.y - ball_radius.y;
-        if (ball_velocity.y > 0.0f)
-        {
-            ball_velocity.y = -damping * ball_velocity.y;
-            ball_accel.y = 0;
-        }
-    }
-    if (ball.y < -court_radius.y + ball_radius.y)
-    {
-        ball.y = -court_radius.y + ball_radius.y;
-        if (ball_velocity.y < 0.0f)
-        {
-            ball_velocity.y = -damping * ball_velocity.y;
-            ball_accel.y = 0;
-        }
+        // eulerian update
+        b.accel = glm::vec2(glm::cos(direction_heading), glm::sin(direction_heading)) * triangle_radius.y;
+        b.vel += elapsed * b.accel * gravity_scale;
+        b.pos += elapsed * b.vel;
     }
 
-    if (ball.x > court_radius.x - ball_radius.x)
+    for (Ball &ball : balls)
     {
-        ball.x = court_radius.x - ball_radius.x;
-        if (ball_velocity.x > 0.0f)
+        // court walls:
+        const float damping = 0.1f; // how much "energy" is lost in the collision
+        if (ball.pos.y > court_radius.y - ball.radius.y)
         {
-            ball_velocity.x = -damping * ball_velocity.x;
-            ball_accel.x = 0;
+            ball.pos.y = court_radius.y - ball.radius.y;
+            if (ball.vel.y > 0.0f)
+            {
+                ball.vel.y = -damping * ball.vel.y;
+                ball.accel.y = 0;
+            }
         }
-    }
-    if (ball.x < -court_radius.x + ball_radius.x)
-    {
-        ball.x = -court_radius.x + ball_radius.x;
-        if (ball_velocity.x < 0.0f)
+        if (ball.pos.y < -court_radius.y + ball.radius.y)
         {
-            ball_velocity.x = -damping * ball_velocity.x;
-            ball_accel.x = 0;
+            ball.pos.y = -court_radius.y + ball.radius.y;
+            if (ball.vel.y < 0.0f)
+            {
+                ball.vel.y = -damping * ball.vel.y;
+                ball.accel.y = 0;
+            }
+        }
+
+        if (ball.pos.x > court_radius.x - ball.radius.x)
+        {
+            ball.pos.x = court_radius.x - ball.radius.x;
+            if (ball.vel.x > 0.0f)
+            {
+                ball.vel.x = -damping * ball.vel.x;
+                ball.accel.x = 0;
+            }
+        }
+        if (ball.pos.x < -court_radius.x + ball.radius.x)
+        {
+            ball.pos.x = -court_radius.x + ball.radius.x;
+            if (ball.vel.x < 0.0f)
+            {
+                ball.vel.x = -damping * ball.vel.x;
+                ball.accel.x = 0;
+            }
         }
     }
 }
@@ -223,7 +235,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
         glm::vec2 circ_verts[N];
         for (int i = 0; i < N; i++)
         {
-            circ_verts[i] = glm::vec2((radius.x * glm::cos(i * M_2_PI / N)), (radius.y * glm::sin(i * M_2_PI / N)));
+            circ_verts[i] = glm::vec2((radius.x * glm::cos(i * 2 * M_PI / N)), (radius.y * glm::sin(i * 2 * M_PI / N)));
         }
 
         for (int i = 0; i < N; i++)
@@ -269,8 +281,10 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
     draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
 
     // ball:
-    // draw_rectangle(ball, ball_radius, fg_color);
-    draw_circle(ball, ball_radius, fg_color);
+    for (Ball &b : balls)
+    {
+        draw_circle(b.pos, b.radius, b.color);
+    }
 
     draw_triangle(triangle, triangle_radius, direction_heading, bg_color);
 
