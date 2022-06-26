@@ -121,6 +121,7 @@ bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size
         glm::vec2 clip_mouse = glm::vec2((evt.motion.x + 0.5f) / window_size.x * 2.0f - 1.0f,
                                          (evt.motion.y + 0.5f) / window_size.y * -2.0f + 1.0f);
         direction_heading = glm::atan(clip_mouse.y, clip_mouse.x);
+        triangle_radius.y = magnitude_scale * glm::length(clip_mouse);
         return true;
     }
 
@@ -134,20 +135,19 @@ void Gravector::update(float elapsed)
 
     //----- ball update -----
 
-    // speed of ball doubles every four points:
-    float speed_multiplier = 4.0f;
-
-    speed_multiplier = std::min(speed_multiplier, 10.0f);
-
-    ball += elapsed * speed_multiplier * ball_velocity;
+    ball_accel = glm::vec2(glm::cos(direction_heading), glm::sin(direction_heading)) * triangle_radius.y;
+    ball_velocity += elapsed * ball_accel * 4.f;
+    ball += elapsed * ball_velocity;
 
     // court walls:
+    const float damping = 0.1f; // how much "energy" is lost in the collision
     if (ball.y > court_radius.y - ball_radius.y)
     {
         ball.y = court_radius.y - ball_radius.y;
         if (ball_velocity.y > 0.0f)
         {
-            ball_velocity.y = -ball_velocity.y;
+            ball_velocity.y = -damping * ball_velocity.y;
+            ball_accel.y = 0;
         }
     }
     if (ball.y < -court_radius.y + ball_radius.y)
@@ -155,7 +155,8 @@ void Gravector::update(float elapsed)
         ball.y = -court_radius.y + ball_radius.y;
         if (ball_velocity.y < 0.0f)
         {
-            ball_velocity.y = -ball_velocity.y;
+            ball_velocity.y = -damping * ball_velocity.y;
+            ball_accel.y = 0;
         }
     }
 
@@ -164,7 +165,8 @@ void Gravector::update(float elapsed)
         ball.x = court_radius.x - ball_radius.x;
         if (ball_velocity.x > 0.0f)
         {
-            ball_velocity.x = -ball_velocity.x;
+            ball_velocity.x = -damping * ball_velocity.x;
+            ball_accel.x = 0;
         }
     }
     if (ball.x < -court_radius.x + ball_radius.x)
@@ -172,7 +174,8 @@ void Gravector::update(float elapsed)
         ball.x = -court_radius.x + ball_radius.x;
         if (ball_velocity.x < 0.0f)
         {
-            ball_velocity.x = -ball_velocity.x;
+            ball_velocity.x = -damping * ball_velocity.x;
+            ball_accel.x = 0;
         }
     }
 }
@@ -213,7 +216,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
     };
 
     // inline helper function for triangle drawing:
-    auto draw_triangle = [&vertices](glm::vec2 const &center, const float radius, const float heading,
+    auto draw_triangle = [&vertices](glm::vec2 const &center, const glm::vec2 radius, const float heading,
                                      glm::u8vec4 const &color) {
         /// NOTE: heading is in radians!
         const float bottomLeft = heading + 2 * M_PI / 3;
@@ -222,15 +225,15 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
 
         // bottom left vertex
         vertices.emplace_back(
-            glm::vec3(center.x + glm::cos(bottomLeft) * radius, center.y + glm::sin(bottomLeft) * radius, 0.0f), color,
-            glm::vec2(0.5f, 0.5f));
+            glm::vec3(center.x + glm::cos(bottomLeft) * radius.x, center.y + glm::sin(bottomLeft) * radius.x, 0.0f),
+            color, glm::vec2(0.5f, 0.5f));
         // bottom right vertex
         vertices.emplace_back(
-            glm::vec3(center.x + glm::cos(bottomRight) * radius, center.y + glm::sin(bottomRight) * radius, 0.0f),
+            glm::vec3(center.x + glm::cos(bottomRight) * radius.x, center.y + glm::sin(bottomRight) * radius.x, 0.0f),
             color, glm::vec2(0.5f, 0.5f));
         // top vertex (colored red)
-        vertices.emplace_back(glm::vec3(center.x + glm::cos(Up) * radius, center.y + glm::sin(Up) * radius, 0.0f),
-                              glm::u8vec4(255, 0, 0, 255), glm::vec2(0.5f, 0.5f));
+        vertices.emplace_back(glm::vec3(center.x + glm::cos(Up) * radius.y, center.y + glm::sin(Up) * radius.y, 0.0f),
+                              glm::u8vec4(255, 0, 255, 255), glm::vec2(0.5f, 0.5f));
     };
 
     // solid objects:
@@ -246,7 +249,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
     // ball:
     draw_rectangle(ball, ball_radius, fg_color);
 
-    draw_triangle(triangle, 0.5f, direction_heading, fg_color);
+    draw_triangle(triangle, triangle_radius, direction_heading, bg_color);
 
     // // scores:
     // glm::vec2 score_radius = glm::vec2(0.1f, 0.1f);

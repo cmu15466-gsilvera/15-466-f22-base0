@@ -27,10 +27,14 @@ struct Gravector : Mode
     glm::vec2 ball_radius = glm::vec2(0.2f, 0.2f);
 
     glm::vec2 ball = glm::vec2(0.0f, 0.0f);
-    glm::vec2 ball_velocity = glm::vec2(-1.0f, 0.0f);
+    glm::vec2 ball_velocity = glm::vec2(0.0f, 0.0f);
+    glm::vec2 ball_accel = glm::vec2(0.0f, 0.0f);
 
     //--- direction vector
     float direction_heading = 0;
+    // radius is (x, y) where x is the equilateral length & y is only the tip length (direction_magnitude)
+    const float magnitude_scale = 1.f; // how much the mouse scale affects the gravity magnitude
+    glm::vec2 triangle_radius = glm::vec2(0.5f, 1.f);
     glm::vec2 triangle = glm::vec2(0.0f, 0.0f);
 
     //----- opengl assets / helpers ------
