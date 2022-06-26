@@ -9,7 +9,7 @@
 #include <vector>
 
 /*
- * Gravector is a game mode that implements a single-player game of Pong.
+ * Gravector is a game mode that implements a single-player game of Gravector.
  */
 
 struct Gravector : Mode

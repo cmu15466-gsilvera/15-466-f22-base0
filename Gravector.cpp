@@ -1,4 +1,4 @@
-#include "PongMode.hpp"
+#include "Gravector.hpp"
 
 // for the GL_ERRORS() macro:
 #include "gl_errors.hpp"
@@ -8,7 +8,7 @@
 
 #include <random>
 
-PongMode::PongMode()
+Gravector::Gravector()
 {
 
     // set up trail as if ball has been here for 'forever':
@@ -34,7 +34,7 @@ PongMode::PongMode()
         // set vertex_buffer as the source of glVertexAttribPointer() commands:
         glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
 
-        // set up the vertex array object to describe arrays of PongMode::Vertex:
+        // set up the vertex array object to describe arrays of Gravector::Vertex:
         glVertexAttribPointer(color_texture_program.Position_vec4, // attribute
                               3,                                   // size
                               GL_FLOAT,                            // type
@@ -44,7 +44,7 @@ PongMode::PongMode()
         );
         glEnableVertexAttribArray(color_texture_program.Position_vec4);
         //[Note that it is okay to bind a vec3 input to a vec4 attribute -- the w component will be filled with 1.0
-        //automatically]
+        // automatically]
 
         glVertexAttribPointer(color_texture_program.Color_vec4, // attribute
                               4,                                // size
@@ -87,7 +87,7 @@ PongMode::PongMode()
 
         // set filtering and wrapping parameters:
         //(it's a bit silly to mipmap a 1x1 texture, but I'm doing it because you may want to use this code to load
-        //different sizes of texture)
+        // different sizes of texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -103,7 +103,7 @@ PongMode::PongMode()
     }
 }
 
-PongMode::~PongMode()
+Gravector::~Gravector()
 {
 
     //----- free OpenGL resources -----
@@ -117,7 +117,7 @@ PongMode::~PongMode()
     white_tex = 0;
 }
 
-bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
+bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 {
 
     if (evt.type == SDL_MOUSEMOTION)
@@ -131,7 +131,7 @@ bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
     return false;
 }
 
-void PongMode::update(float elapsed)
+void Gravector::update(float elapsed)
 {
 
     static std::mt19937 mt; // mersenne twister pseudo-random number generator
@@ -276,7 +276,7 @@ void PongMode::update(float elapsed)
     }
 }
 
-void PongMode::draw(glm::uvec2 const &drawable_size)
+void Gravector::draw(glm::uvec2 const &drawable_size)
 {
 // some nice colors from the course web page:
 #define HEX_TO_U8VEC4(HX) (glm::u8vec4((HX >> 24) & 0xff, (HX >> 16) & 0xff, (HX >> 8) & 0xff, (HX)&0xff))
