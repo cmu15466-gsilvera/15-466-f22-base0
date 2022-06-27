@@ -12,6 +12,7 @@
 #define RED glm::u8vec4(255.f, 0.f, 0.f, 255.f)
 #define GREEN glm::u8vec4(0.f, 255.f, 0.f, 255.f)
 #define BLUE glm::u8vec4(0.f, 0.f, 255.f, 255.f)
+#define CYAN glm::u8vec4(0.f, 255.f, 255.f, 255.f)
 #define YELLOW glm::u8vec4(255.f, 255.f, 0.f, 255.f)
 #define WHITE glm::u8vec4(255.f, 255.f, 255.f, 255.f)
 
@@ -82,6 +83,10 @@ struct Gravector : Mode
     void new_ball();
 
     Goal goal = Goal();
+    const float max_energy = court_radius.y;
+    float energy = 3.f;
+    float energy_use_rate = -0.5f;
+    float energy_recharge_rate = 0.25f;
     int score = 0;
     const float score_scale = 2.0f; // make larger to have to score less, smaller to need to score more
 

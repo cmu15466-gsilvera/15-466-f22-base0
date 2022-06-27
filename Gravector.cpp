@@ -134,9 +134,14 @@ bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size
         main_ball.pos = clip_mouse * court_radius;
     }
 
-    if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_SPACE)
+    if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_SPACE && energy > 0)
     {
-        new_ball();
+        main_ball.color.w = 50;
+        energy += energy_use_rate;
+    }
+    if ((evt.type == SDL_KEYUP && evt.key.keysym.sym == SDLK_SPACE) || energy <= 0)
+    {
+        main_ball.color.w = 255;
     }
 
     return false;
@@ -284,23 +289,28 @@ void Gravector::update(float elapsed)
         main_ball.vel = (main_ball.pos - main_ball_prev_pos) / elapsed;
         main_ball_prev_pos = main_ball.pos;
     }
-    main_ball.color = BLUE;
     if (current_time > breather)
     {
-        for (Ball &b : balls)
+        if (main_ball.color.w == 255)
         {
-            const float overlap = (b.radius + main_ball.radius) - glm::length(b.pos - main_ball.pos);
-            if (overlap > 0)
+            for (Ball &b : balls)
             {
-                main_ball.color = RED;
-                num_lives--;
-                breather = current_time + breather_amnt_sec;
-                if (num_lives == 0)
+                const float overlap = (b.radius + main_ball.radius) - glm::length(b.pos - main_ball.pos);
+                if (overlap > 0)
                 {
-                    std::cout << "Game over! -- Score: " << score << std::endl;
+                    main_ball.color = RED;
+                    num_lives--;
+                    breather = current_time + breather_amnt_sec;
+                    if (num_lives == 0)
+                    {
+                        std::cout << "Game over! -- Score: " << score << std::endl;
+                    }
+                    break;
                 }
-                break;
             }
+            main_ball.color = BLUE;
+            // begin recharging
+            energy = glm::min(max_energy, energy + energy_recharge_rate);
         }
     }
     else
@@ -426,14 +436,15 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
                     glm::vec2(heart_rad, heart_rad), RED);
     }
 
+    // draw energy
     // draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius + 4 * score_height),
     //                glm::vec2(score_scale * score[0], score_height), RED);
     // draw_rectangle(glm::vec2(court_radius.x + wall_radius + 4 * score_height, 0.0f),
     //                glm::vec2(score_height, score_scale * score[1]), GREEN);
     // draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius - 4 * score_height),
     //                glm::vec2(score_scale * score[2], score_height), BLUE);
-    // draw_rectangle(glm::vec2(-court_radius.x - wall_radius - 4 * score_height, 0.0f),
-    //                glm::vec2(score_height, score_scale * score[3]), YELLOW);
+    const float bar_height = 0.15f;
+    draw_rectangle(glm::vec2(-court_radius.x - wall_radius - bar_height, 0.0f), glm::vec2(bar_height, energy), CYAN);
 
     //------ compute court-to-window transform ------
 
