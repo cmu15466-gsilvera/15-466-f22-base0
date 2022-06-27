@@ -13,45 +13,37 @@
 #define GREEN glm::u8vec4(0.f, 255.f, 0.f, 255.f)
 #define BLUE glm::u8vec4(0.f, 0.f, 255.f, 255.f)
 #define YELLOW glm::u8vec4(255.f, 255.f, 0.f, 255.f)
+#define WHITE glm::u8vec4(255.f, 255.f, 255.f, 255.f)
 
 struct Ball
 {
-    Ball(const glm::vec2 &p, const glm::vec2 &v, const glm::vec2 &a) : pos(p), vel(v), accel(a)
+    Ball(const glm::vec2 &p, const glm::vec2 &v, const glm::vec2 &a, const glm::u8vec4 col = WHITE)
+        : pos(p), vel(v), accel(a)
     {
-        radius = 0.2f;
+        radius = 0.3f;
         mass = 1.0f;
-        color_idx = Ball::index % 4;
-        choose_color();
+        color = col;
     }
 
-    void choose_color()
-    {
-        Ball::index += 1;
-        if (!color_win[color_idx])
-        {
-            if (color_idx == 0)
-                color = RED;
-            else if (color_idx == 1)
-                color = GREEN;
-            else if (color_idx == 2)
-                color = BLUE;
-            else if (color_idx == 3)
-                color = YELLOW;
-        }
-        else
-        {
-            // game over!
-            color_idx = -1;
-            color = glm::u8vec4(255.f, 255.f, 255.f, 255.f);
-        }
-    }
     glm::vec2 pos, vel, accel;
     float radius, mass;
     glm::u8vec4 color;
-    int color_idx;
-    bool finished = false;
-    static int index;
-    static bool color_win[4];
+};
+
+struct Goal
+{
+
+    void new_pos(const glm::vec2 &court_radius)
+    {
+        const float rand_x = (rand() / float(rand.max())) * 2.f * court_radius.x - court_radius.x;
+        const float rand_y = (rand() / float(rand.max())) * 2.f * court_radius.y - court_radius.y;
+        pos = glm::vec2(rand_x, rand_y);
+    }
+    std::mt19937 rand;
+
+    glm::vec2 pos;
+    float radius = 0.5;
+    glm::u8vec4 color = GREEN;
 };
 
 /*
@@ -72,19 +64,25 @@ struct Gravector : Mode
     glm::vec2 court_radius = glm::vec2(7.0f, 7.0f);
 
     const size_t num_init_balls = 1;
-    const float gravity_scale = 4.f;
-    const float radius_growth = 0.001f;
-    const float mass_growth = 0.001f;
-    const float radius_shrink_factor = 0.5f; // during collisions
-    const float mass_shrink_factor = 0.5f;   // during collisions
-    const float min_ball_radius = 0.1f;
-    const float ball_ball_collision_damping = 1.1f; // how much "energy" is preserved after ball-ball collision
+    float gravity_scale = 1.f;
+    const float gravity_scale_incr = 0.001f;
+    const float ball_ball_collision_damping = 1.0f; // how much "energy" is preserved after ball-ball collision
     const float ball_wall_collision_damping = 0.3f; // how much "energy" is preserved after ball-wall collision
+
+    const float ball_growth_rate = -0.0001f;
+    const float spawn_rate = 3; // random spawning every ~3 s
 
     float current_time = 0.f;
     std::vector<Ball> balls;
+    glm::vec2 main_ball_prev_pos;
+    int num_lives = 5;
+    float breather = 0.f;
+    const float breather_amnt_sec = 1.f;
+    Ball main_ball = Ball(glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f), BLUE);
     void new_ball();
-    float score[4];
+
+    Goal goal = Goal();
+    int score = 0;
     const float score_scale = 2.0f; // make larger to have to score less, smaller to need to score more
 
     float next_spawn_t = 0.f;

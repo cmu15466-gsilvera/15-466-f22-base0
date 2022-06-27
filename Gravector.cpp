@@ -6,8 +6,6 @@
 // for glm::value_ptr() :
 #include <glm/gtc/type_ptr.hpp>
 
-int Ball::index = 0;
-bool Ball::color_win[4];
 Gravector::Gravector()
 {
 
@@ -19,15 +17,10 @@ Gravector::Gravector()
         GL_ERRORS(); // PARANOIA: print out any OpenGL errors that may have happened
     }
 
+    goal.new_pos(court_radius);
     for (size_t i = 0; i < num_init_balls; i++)
     {
         new_ball();
-    }
-
-    for (size_t i = 0; i < 4; i++)
-    {
-        score[i] = 0;
-        Ball::color_win[i] = false;
     }
 
     { // vertex array mapping buffer for color_texture_program:
@@ -127,6 +120,8 @@ Gravector::~Gravector()
 
 bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 {
+    if (num_lives <= 0)
+        return false;
 
     if (evt.type == SDL_MOUSEMOTION)
     {
@@ -135,6 +130,8 @@ bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size
                                          (evt.motion.y + 0.5f) / window_size.y * -2.0f + 1.0f);
         direction_heading = glm::atan(clip_mouse.y, clip_mouse.x);
         triangle_radius.y = magnitude_scale * glm::length(clip_mouse);
+
+        main_ball.pos = clip_mouse * court_radius;
     }
 
     if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_SPACE)
@@ -148,8 +145,12 @@ bool Gravector::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size
 void Gravector::new_ball()
 {
     static std::mt19937 mt;
-    const float random_x = (mt() / float(mt.max())) * 2.f * court_radius.x - court_radius.x;
-    const float random_y = (mt() / float(mt.max())) * 2.f * court_radius.y - court_radius.y;
+    float random_x, random_y;
+    do
+    {
+        random_x = (mt() / float(mt.max())) * 2.f * court_radius.x - court_radius.x;
+        random_y = (mt() / float(mt.max())) * 2.f * court_radius.y - court_radius.y;
+    } while ((goal.radius * 2) > glm::length(glm::vec2(random_x, random_y) - main_ball.pos));
     const float random_vel_x = (mt() / float(mt.max())) * 2.f - 1;
     const float random_vel_y = (mt() / float(mt.max())) * 2.f - 1;
     balls.push_back(Ball(glm::vec2(random_x, random_y), glm::vec2(random_vel_x, random_vel_y), glm::vec2(0.0f, 0.0f)));
@@ -158,13 +159,18 @@ void Gravector::new_ball()
 void Gravector::update(float elapsed)
 {
     current_time += elapsed;
+    if (num_lives <= 0)
+        return;
 
     static std::mt19937 mt; // mersenne twister pseudo-random number generator
+
+    gravity_scale += gravity_scale_incr;
 
     if (current_time > next_spawn_t)
     {
         new_ball();
-        next_spawn_t += 4 * rand_next_time() / float(rand_next_time.max());
+        // spawn_rate +- 0.5s
+        next_spawn_t = current_time + spawn_rate + (rand_next_time() / float(rand_next_time.max()) - 0.5);
     }
 
     //----- ball update -----
@@ -175,8 +181,8 @@ void Gravector::update(float elapsed)
         b.accel = glm::vec2(glm::cos(direction_heading), glm::sin(direction_heading)) * triangle_radius.y;
         b.vel += elapsed * b.accel * gravity_scale;
         b.pos += elapsed * b.vel;
-        b.radius += radius_growth;
-        b.mass += mass_growth;
+        b.radius += ball_growth_rate;
+        b.mass += ball_growth_rate;
     }
 
     for (Ball &b : balls)
@@ -213,18 +219,6 @@ void Gravector::update(float elapsed)
                     // update their positions by one velocity tick
                     b.pos += elapsed * b.vel;
                     other_b.pos += elapsed * other_b.vel;
-
-                    if (b.radius > min_ball_radius)
-                    {
-                        // shrink these balls
-                        b.radius *= radius_shrink_factor;
-                        b.mass *= mass_shrink_factor;
-                    }
-                    if (other_b.radius > min_ball_radius)
-                    {
-                        other_b.radius *= radius_shrink_factor;
-                        other_b.mass *= mass_shrink_factor;
-                    }
                 }
             }
         }
@@ -233,19 +227,9 @@ void Gravector::update(float elapsed)
     std::vector<Ball> remaining_balls;
     for (Ball &b : balls)
     {
-        if (b.finished == false)
+        if (b.radius > 0.1f)
         {
             remaining_balls.push_back(b);
-        }
-        else
-        {
-            score[b.color_idx] += b.mass;
-            /// TODO: don't assume just court_radius.x
-            if (score[b.color_idx] > (court_radius.x / score_scale))
-            {
-                score[b.color_idx] = (court_radius.x / score_scale);
-                b.color_win[b.color_idx] = true;
-            }
         }
     }
     balls.clear();
@@ -264,11 +248,6 @@ void Gravector::update(float elapsed)
                 ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
             }
-
-            if (ball.color_idx == 0)
-            {
-                ball.finished = true;
-            }
         }
         if (ball.pos.y < -court_radius.y + ball.radius) // bottom wall
         {
@@ -277,10 +256,6 @@ void Gravector::update(float elapsed)
             {
                 ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
-            }
-            if (ball.color_idx == 2)
-            {
-                ball.finished = true;
             }
         }
         if (ball.pos.x > court_radius.x - ball.radius) // right wall
@@ -291,11 +266,6 @@ void Gravector::update(float elapsed)
                 ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
             }
-
-            if (ball.color_idx == 1)
-            {
-                ball.finished = true;
-            }
         }
         if (ball.pos.x < -court_radius.x + ball.radius) // left wall
         {
@@ -305,12 +275,45 @@ void Gravector::update(float elapsed)
                 ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
             }
+        }
+    }
 
-            if (ball.color_idx == 3)
+    // update main_ball
+    if (main_ball.pos != main_ball_prev_pos)
+    {
+        main_ball.vel = (main_ball.pos - main_ball_prev_pos) / elapsed;
+        main_ball_prev_pos = main_ball.pos;
+    }
+    main_ball.color = BLUE;
+    if (current_time > breather)
+    {
+        for (Ball &b : balls)
+        {
+            const float overlap = (b.radius + main_ball.radius) - glm::length(b.pos - main_ball.pos);
+            if (overlap > 0)
             {
-                ball.finished = true;
+                main_ball.color = RED;
+                num_lives--;
+                breather = current_time + breather_amnt_sec;
+                if (num_lives == 0)
+                {
+                    std::cout << "Game over! -- Score: " << score << std::endl;
+                }
+                break;
             }
         }
+    }
+    else
+    {
+        main_ball.color = RED;
+    }
+
+    const float overlap = (goal.radius + main_ball.radius) - glm::length(goal.pos - main_ball.pos);
+    if (overlap > 0)
+    {
+        score++;
+        new_ball();
+        goal.new_pos(court_radius);
     }
 }
 
@@ -319,13 +322,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
 // some nice colors from the course web page:
 #define HEX_TO_U8VEC4(HX) (glm::u8vec4((HX >> 24) & 0xff, (HX >> 16) & 0xff, (HX >> 8) & 0xff, (HX)&0xff))
     const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x193b59ff);
-    // const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
-    // const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
-    const std::vector<glm::u8vec4> trail_colors = {
-        HEX_TO_U8VEC4(0xf2ad9488),
-        HEX_TO_U8VEC4(0xf2897288),
-        HEX_TO_U8VEC4(0xbacac088),
-    };
+    const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
 #undef HEX_TO_U8VEC4
 
     // other useful drawing constants:
@@ -396,12 +393,15 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
 
     // walls:
     draw_rectangle(glm::vec2(-court_radius.x - wall_radius, 0.0f),
-                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), YELLOW);
+                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
     draw_rectangle(glm::vec2(court_radius.x + wall_radius, 0.0f),
-                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), GREEN);
-    draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius), glm::vec2(court_radius.x, wall_radius), BLUE);
-    draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), RED);
+                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
+    draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
+    draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
 
+    { // goal
+        draw_circle(goal.pos, glm::vec2(goal.radius, goal.radius), goal.color);
+    }
     // ball:
     for (const Ball &b : balls)
     {
@@ -409,20 +409,31 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
         const float velocity_dir = glm::atan(b.vel.y, b.vel.x);
         draw_triangle(b.pos, glm::vec2(b.radius, 2 * b.radius), velocity_dir, b.color);
     }
+    { // player ball
+        draw_circle(main_ball.pos, glm::vec2(main_ball.radius, main_ball.radius), main_ball.color);
+        const float velocity_dir = glm::atan(main_ball.vel.y, main_ball.vel.x);
+        draw_triangle(main_ball.pos, glm::vec2(main_ball.radius, 2 * main_ball.radius), velocity_dir, main_ball.color);
+    }
 
     draw_triangle(triangle, triangle_radius, direction_heading, glm::u8vec4(255, 0, 255, 255));
 
     // draw scores
-    const float score_height = 0.05f;
+    const float heart_rad = 0.5f;
+    for (int i = 0; i < num_lives; i++)
+    {
+        draw_circle(glm::vec2(court_radius.x + wall_radius + (heart_rad + 0.05f),
+                              -court_radius.y - wall_radius + (heart_rad * 2 + 0.1f) * float(i + 1)),
+                    glm::vec2(heart_rad, heart_rad), RED);
+    }
 
-    draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius + 4 * score_height),
-                   glm::vec2(score_scale * score[0], score_height), RED);
-    draw_rectangle(glm::vec2(court_radius.x + wall_radius + 4 * score_height, 0.0f),
-                   glm::vec2(score_height, score_scale * score[1]), GREEN);
-    draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius - 4 * score_height),
-                   glm::vec2(score_scale * score[2], score_height), BLUE);
-    draw_rectangle(glm::vec2(-court_radius.x - wall_radius - 4 * score_height, 0.0f),
-                   glm::vec2(score_height, score_scale * score[3]), YELLOW);
+    // draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius + 4 * score_height),
+    //                glm::vec2(score_scale * score[0], score_height), RED);
+    // draw_rectangle(glm::vec2(court_radius.x + wall_radius + 4 * score_height, 0.0f),
+    //                glm::vec2(score_height, score_scale * score[1]), GREEN);
+    // draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius - 4 * score_height),
+    //                glm::vec2(score_scale * score[2], score_height), BLUE);
+    // draw_rectangle(glm::vec2(-court_radius.x - wall_radius - 4 * score_height, 0.0f),
+    //                glm::vec2(score_height, score_scale * score[3]), YELLOW);
 
     //------ compute court-to-window transform ------
 
