@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <deque>
+#include <random>
 #include <vector>
 
 #define RED glm::u8vec4(255.f, 0.f, 0.f, 255.f)
@@ -20,15 +21,29 @@ struct Ball
         radius = 0.2f;
         mass = 1.0f;
         color_idx = Ball::index % 4;
-        if (color_idx == 0)
-            color = RED;
-        else if (color_idx == 1)
-            color = GREEN;
-        else if (color_idx == 2)
-            color = BLUE;
-        else if (color_idx == 3)
-            color = YELLOW;
+        choose_color();
+    }
+
+    void choose_color()
+    {
         Ball::index += 1;
+        if (!color_win[color_idx])
+        {
+            if (color_idx == 0)
+                color = RED;
+            else if (color_idx == 1)
+                color = GREEN;
+            else if (color_idx == 2)
+                color = BLUE;
+            else if (color_idx == 3)
+                color = YELLOW;
+        }
+        else
+        {
+            // game over!
+            color_idx = -1;
+            color = glm::u8vec4(255.f, 255.f, 255.f, 255.f);
+        }
     }
     glm::vec2 pos, vel, accel;
     float radius, mass;
@@ -36,6 +51,7 @@ struct Ball
     int color_idx;
     bool finished = false;
     static int index;
+    static bool color_win[4];
 };
 
 /*
@@ -53,7 +69,7 @@ struct Gravector : Mode
     virtual void draw(glm::uvec2 const &drawable_size) override;
     //----- game state -----
 
-    glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
+    glm::vec2 court_radius = glm::vec2(7.0f, 7.0f);
 
     const size_t num_init_balls = 1;
     const float gravity_scale = 4.f;
@@ -61,14 +77,18 @@ struct Gravector : Mode
     const float mass_growth = 0.001f;
     const float radius_shrink_factor = 0.5f; // during collisions
     const float mass_shrink_factor = 0.5f;   // during collisions
-    const float min_ball_radius_before_death = 0.01f;
+    const float min_ball_radius = 0.1f;
     const float ball_ball_collision_damping = 1.1f; // how much "energy" is preserved after ball-ball collision
     const float ball_wall_collision_damping = 0.3f; // how much "energy" is preserved after ball-wall collision
 
     float current_time = 0.f;
     std::vector<Ball> balls;
     void new_ball();
-    size_t score[4];
+    float score[4];
+    const float score_scale = 2.0f; // make larger to have to score less, smaller to need to score more
+
+    float next_spawn_t = 0.f;
+    std::mt19937 rand_next_time;
 
     //--- direction vector
     float direction_heading = 0;
