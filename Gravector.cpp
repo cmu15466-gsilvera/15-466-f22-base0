@@ -8,6 +8,7 @@
 
 #include <random>
 
+int Ball::index = 0;
 Gravector::Gravector()
 {
 
@@ -21,7 +22,12 @@ Gravector::Gravector()
 
     for (size_t i = 0; i < num_init_balls; i++)
     {
-        balls.push_back(Ball(glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f)));
+        new_ball();
+    }
+
+    for (size_t i = 0; i < 4; i++)
+    {
+        score[i] = 0;
     }
 
     { // vertex array mapping buffer for color_texture_program:
@@ -142,11 +148,14 @@ void Gravector::new_ball()
     static std::mt19937 mt;
     const float random_x = (mt() / float(mt.max())) * 2.f * court_radius.x - court_radius.x;
     const float random_y = (mt() / float(mt.max())) * 2.f * court_radius.y - court_radius.y;
-    balls.push_back(Ball(glm::vec2(random_x, random_y), glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f)));
+    const float random_vel_x = (mt() / float(mt.max())) * 2.f - 1;
+    const float random_vel_y = (mt() / float(mt.max())) * 2.f - 1;
+    balls.push_back(Ball(glm::vec2(random_x, random_y), glm::vec2(random_vel_x, random_vel_y), glm::vec2(0.0f, 0.0f)));
 }
 
 void Gravector::update(float elapsed)
 {
+    current_time += elapsed;
 
     static std::mt19937 mt; // mersenne twister pseudo-random number generator
 
@@ -180,12 +189,18 @@ void Gravector::update(float elapsed)
                     b.pos += (b_speed / (b_speed + other_b_speed)) * disp;
                     other_b.pos -= (other_b_speed / (b_speed + other_b_speed)) * disp;
 
+                    // update their positions by one velocity tick
+                    b.pos -= elapsed * b.vel;
+                    other_b.pos -= elapsed * other_b.vel;
+
                     // compute collision
                     const float sum_mass = b.mass + other_b.mass;
-                    b.vel = ball_ball_collision_damping *
-                            (b.vel * (b.mass - other_b.mass) + (2 * other_b.mass * other_b.vel)) / sum_mass;
+                    glm::vec2 new_b_vel = ball_ball_collision_damping *
+                                          (b.vel * (b.mass - other_b.mass) + (2 * other_b.mass * other_b.vel)) /
+                                          sum_mass;
                     other_b.vel = ball_ball_collision_damping *
                                   (other_b.vel * (other_b.mass - b.mass) + (2 * b.mass * b.vel)) / sum_mass;
+                    b.vel = new_b_vel;
 
                     // update their positions by one velocity tick
                     b.pos += elapsed * b.vel;
@@ -201,23 +216,27 @@ void Gravector::update(float elapsed)
         }
     }
 
-    std::vector<Ball> alive_balls;
+    std::vector<Ball> remaining_balls;
     for (Ball &b : balls)
     {
-        if (b.radius > min_ball_radius_before_death)
+        if (b.finished == false)
         {
-            alive_balls.push_back(b);
+            remaining_balls.push_back(b);
+        }
+        else
+        {
+            score[b.color_idx] += b.mass;
         }
     }
     balls.clear();
-    balls.swap(alive_balls);
-    // now balls contains only alive balls
+    balls.swap(remaining_balls);
+    // now balls contains only remaining balls
 
     /// TODO: refactor
     for (Ball &ball : balls)
     {
         // court walls:
-        if (ball.pos.y > court_radius.y - ball.radius)
+        if (ball.pos.y > court_radius.y - ball.radius) // top wall
         {
             ball.pos.y = court_radius.y - ball.radius;
             if (ball.vel.y > 0.0f)
@@ -225,8 +244,13 @@ void Gravector::update(float elapsed)
                 ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
             }
+
+            if (ball.color_idx == 0)
+            {
+                ball.finished = true;
+            }
         }
-        if (ball.pos.y < -court_radius.y + ball.radius)
+        if (ball.pos.y < -court_radius.y + ball.radius) // bottom wall
         {
             ball.pos.y = -court_radius.y + ball.radius;
             if (ball.vel.y < 0.0f)
@@ -234,9 +258,12 @@ void Gravector::update(float elapsed)
                 ball.vel.y = -ball_wall_collision_damping * ball.vel.y;
                 ball.accel.y = 0;
             }
+            if (ball.color_idx == 2)
+            {
+                ball.finished = true;
+            }
         }
-
-        if (ball.pos.x > court_radius.x - ball.radius)
+        if (ball.pos.x > court_radius.x - ball.radius) // right wall
         {
             ball.pos.x = court_radius.x - ball.radius;
             if (ball.vel.x > 0.0f)
@@ -244,14 +271,24 @@ void Gravector::update(float elapsed)
                 ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
             }
+
+            if (ball.color_idx == 1)
+            {
+                ball.finished = true;
+            }
         }
-        if (ball.pos.x < -court_radius.x + ball.radius)
+        if (ball.pos.x < -court_radius.x + ball.radius) // left wall
         {
             ball.pos.x = -court_radius.x + ball.radius;
             if (ball.vel.x < 0.0f)
             {
                 ball.vel.x = -ball_wall_collision_damping * ball.vel.x;
                 ball.accel.x = 0;
+            }
+
+            if (ball.color_idx == 3)
+            {
+                ball.finished = true;
             }
         }
     }
@@ -262,7 +299,7 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
 // some nice colors from the course web page:
 #define HEX_TO_U8VEC4(HX) (glm::u8vec4((HX >> 24) & 0xff, (HX >> 16) & 0xff, (HX >> 8) & 0xff, (HX)&0xff))
     const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x193b59ff);
-    const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
+    // const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
     // const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
     const std::vector<glm::u8vec4> trail_colors = {
         HEX_TO_U8VEC4(0xf2ad9488),
@@ -332,41 +369,33 @@ void Gravector::draw(glm::uvec2 const &drawable_size)
             color, glm::vec2(0.5f, 0.5f));
         // top vertex (colored red)
         vertices.emplace_back(glm::vec3(center.x + glm::cos(Up) * radius.y, center.y + glm::sin(Up) * radius.y, 0.0f),
-                              glm::u8vec4(255, 0, 255, 255), glm::vec2(0.5f, 0.5f));
+                              color, glm::vec2(0.5f, 0.5f));
     };
 
     // solid objects:
 
     // walls:
     draw_rectangle(glm::vec2(-court_radius.x - wall_radius, 0.0f),
-                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
+                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), YELLOW);
     draw_rectangle(glm::vec2(court_radius.x + wall_radius, 0.0f),
-                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
-    draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
-    draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
+                   glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), GREEN);
+    draw_rectangle(glm::vec2(0.0f, -court_radius.y - wall_radius), glm::vec2(court_radius.x, wall_radius), BLUE);
+    draw_rectangle(glm::vec2(0.0f, court_radius.y + wall_radius), glm::vec2(court_radius.x, wall_radius), RED);
 
     // ball:
     for (Ball &b : balls)
     {
         draw_circle(b.pos, glm::vec2(b.radius, b.radius), b.color);
+        const float velocity_dir = glm::atan(b.vel.y, b.vel.x);
+        draw_triangle(b.pos, glm::vec2(b.radius, 2 * b.radius), velocity_dir, b.color);
     }
 
-    draw_triangle(triangle, triangle_radius, direction_heading, bg_color);
+    draw_triangle(triangle, triangle_radius, direction_heading, glm::u8vec4(255, 0, 255, 255));
 
-    // // scores:
-    // glm::vec2 score_radius = glm::vec2(0.1f, 0.1f);
-    // for (uint32_t i = 0; i < left_score; ++i)
-    // {
-    //     draw_rectangle(glm::vec2(-court_radius.x + (2.0f + 3.0f * i) * score_radius.x,
-    //                              court_radius.y + 2.0f * wall_radius + 2.0f * score_radius.y),
-    //                    score_radius, fg_color);
-    // }
-    // for (uint32_t i = 0; i < right_score; ++i)
-    // {
-    //     draw_rectangle(glm::vec2(court_radius.x - (2.0f + 3.0f * i) * score_radius.x,
-    //                              court_radius.y + 2.0f * wall_radius + 2.0f * score_radius.y),
-    //                    score_radius, fg_color);
-    // }
+    // draw scores
+    const float score_height = 0.5f;
+    draw_rectangle(glm::vec2(-court_radius.x - wall_radius, court_radius.y + wall_radius + score_height),
+                   glm::vec2(score[0], score_height), RED);
 
     //------ compute court-to-window transform ------
 

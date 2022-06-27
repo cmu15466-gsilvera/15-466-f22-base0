@@ -8,9 +8,10 @@
 #include <deque>
 #include <vector>
 
-/*
- * Gravector is a game mode that implements a single-player game of Gravector.
- */
+#define RED glm::u8vec4(255.f, 0.f, 0.f, 255.f)
+#define GREEN glm::u8vec4(0.f, 255.f, 0.f, 255.f)
+#define BLUE glm::u8vec4(0.f, 0.f, 255.f, 255.f)
+#define YELLOW glm::u8vec4(255.f, 255.f, 0.f, 255.f)
 
 struct Ball
 {
@@ -18,12 +19,28 @@ struct Ball
     {
         radius = 0.2f;
         mass = 1.0f;
-        color = glm::u8vec4(255.f, 255.f, 255.f, 255.f);
+        color_idx = Ball::index % 4;
+        if (color_idx == 0)
+            color = RED;
+        else if (color_idx == 1)
+            color = GREEN;
+        else if (color_idx == 2)
+            color = BLUE;
+        else if (color_idx == 3)
+            color = YELLOW;
+        Ball::index += 1;
     }
     glm::vec2 pos, vel, accel;
     float radius, mass;
     glm::u8vec4 color;
+    int color_idx;
+    bool finished = false;
+    static int index;
 };
+
+/*
+ * Gravector is a game mode that implements a single-player game of Gravector.
+ */
 
 struct Gravector : Mode
 {
@@ -48,8 +65,10 @@ struct Gravector : Mode
     const float ball_ball_collision_damping = 1.1f; // how much "energy" is preserved after ball-ball collision
     const float ball_wall_collision_damping = 0.3f; // how much "energy" is preserved after ball-wall collision
 
+    float current_time = 0.f;
     std::vector<Ball> balls;
     void new_ball();
+    size_t score[4];
 
     //--- direction vector
     float direction_heading = 0;
